@@ -248,6 +248,8 @@ class GSLTest : public ::testing::Test {
 
   template <typename F>
   void TestFunc(const Function &af, F f) {
+    fmt::print("Testing {}\n", af.name());
+    std::fflush(stdout);
     TestFuncBindPointers(af, fun::FunctionPointer(f));
   }
 };
@@ -490,7 +492,7 @@ void GSLTest::TestFunc(
         args[i] = Variant::FromDouble(0);
       }
     }
-    if (has_double_arg)
+    if (has_double_arg && !af.SkipPoint(args))
       EXPECT_ERROR(EvalError(af, args).error(), af(args));
   }
   if (arg_index < num_args) {
@@ -830,10 +832,18 @@ int ellint_D(double phi, double k, gsl_mode_t mode, gsl_sf_result *result) {
 #endif
 }
 
+struct SkipNaN : FunctionInfo {
+  bool SkipPoint(const Tuple &args) const {
+    return gsl_isnan(args[0].number());
+  }
+};
+
 TEST_F(GSLTest, EllInt) {
-  TEST_EFUNC(gsl_sf_ellint_Kcomp);
-  TEST_EFUNC(gsl_sf_ellint_Ecomp);
-  TEST_EFUNC(gsl_sf_ellint_Pcomp);
+  // Don't test on NaN because it causes gsl_sf_ellint_Kcomp to stall on EPEL6:
+  // https://github.com/ampl/mp/issues/103
+  TEST_EFUNC2(gsl_sf_ellint_Kcomp, SkipNaN());
+  TEST_EFUNC2(gsl_sf_ellint_Ecomp, SkipNaN());
+  TEST_EFUNC2(gsl_sf_ellint_Pcomp, SkipNaN());
   TEST_EFUNC(gsl_sf_ellint_F);
   TEST_EFUNC(gsl_sf_ellint_E);
   TEST_EFUNC2(gsl_sf_ellint_P, NoDeriv());
